@@ -2,7 +2,7 @@ import tkinter
 from tkinter import ttk
 import Tunneler
 
-menu = ['local | self->redirector->dest','remote | {any}->origin->self->dest','dynamic | self->redirecter->{any}']
+menu = ['local        |   self->self->redirector->dest','remote    |   {any}->origin->self->dest','dynamic |   self->self->redirecter->{any}']
 class TunnGui(object):
     def __init__(self):
         self.buttons = []
@@ -14,10 +14,10 @@ class TunnGui(object):
         self.top.resizable(width=True,height=True)
         
         # Currently text input in the first column can be set up with createInput. This may change.
-        self.createInput(0,"Username:")
-        self.createInput(1,"Src ip:")      
-        self.createInput(2,"Dest ip:")
-        self.createInput(3,"Redir ip:")
+        self.createInput("Username:",0)
+        self.createInput("Src ip:",1)      
+        self.createInput("Dest ip:",2)
+        self.createInput("Redir ip:",3)
         
         # Paned Window is a resizeable frame that can be "packed" by adding frames/child widgets. They get added in the orient direction.
         self.right_frame = tkinter.PanedWindow(self.top,orient=tkinter.VERTICAL,borderwidth=3)
@@ -83,14 +83,19 @@ class TunnGui(object):
             print(e)
             self.text.insert(tkinter.END,"Something went wrong\n")
         
-    def createInput(self,row=1,column=1,label):
+    def createInput(self,label,row=1,column=1,parent=None):
         '''Creates a text box with a label that can then be used to get user input'''
-        inplabel = tkinter.Label(text=label,justify=tkinter.LEFT)
-        inplabel.grid(row=row,column=1,sticky=tkinter.N+tkinter.S+tkinter.E+tkinter.W)
         
-        inpbox = tkinter.Text(self.top,wrap=tkinter.WORD,height=2,width=25)
+        if parent == None:
+            parent = self.top
+            
+        
+        inplabel = tkinter.Label(parent,text=label,justify=tkinter.LEFT)
+        inplabel.grid(row=row,column=column,sticky=tkinter.N+tkinter.S+tkinter.E+tkinter.W)
+        
+        inpbox = tkinter.Text(parent,wrap=tkinter.WORD,height=2,width=25)
         inpbox.config()
-        inpbox.grid(row=row,column=2,padx=5,pady=(20,10),sticky=tkinter.E+tkinter.W)           
+        inpbox.grid(row=row,column=column+1,padx=5,pady=(20,10),sticky=tkinter.E+tkinter.W)           
         self.entries.append(inpbox)
              
 if __name__=='__main__':  
