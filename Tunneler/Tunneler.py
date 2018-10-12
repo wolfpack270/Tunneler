@@ -30,7 +30,7 @@ class Tunnel(object):
         self._validate_ports()
     
     def _validate_type(self):
-        '''Verifies ssh settings'''
+        '''Verifies a tunnel type is selected'''
         if not all(map(lambda x : (isinstance(x,bool) or x==0 or x==1),[self.remote,self.local,self.dynamic])):
             print("remote,local and dynamic must be boolean values")
             raise ValueError
@@ -40,6 +40,7 @@ class Tunnel(object):
             raise AttributeError    
     
     def _validate_ports(self):
+        '''Makes sure ports are numbers and inside a valid range (0,65535]'''
         if not (isinstance(self.ssh_port,int) and isinstance(self.dest_port,int) and isinstance(self.orig_port,int)):
             if self.ssh_port<0 or self.ssh_port>65535:
                 print("SSH port must be between 0 and 65535, not {}".format(self.ssh_port))
@@ -51,6 +52,7 @@ class Tunnel(object):
             raise ValueError
     
     def _validate_user(self):
+        '''Ensures usernames start with a character and consist of only alpha numeric values'''
         if self.user.strip() == '':
             print("Username can not be blank")
             raise ValueError
@@ -62,6 +64,11 @@ class Tunnel(object):
             raise ValueError
         
     def _validate_ip(self,ip):
+        '''Ensures the ip is a string, but not empty.
+        Checks to see if hostname/url resolves
+        or
+        Checks if the input is a valid ip (4 octets, not starting with 0 or 255)'''
+        ip=ip.strip()
         if not isinstance(ip,str):
             print("ip {} must be string".format(ip))
             raise TypeError
@@ -85,6 +92,7 @@ class Tunnel(object):
         
         
         if octs[0] == '127':
+            # if it starts with 127, let them do their own loopback validation
             return
           
         if int(octs[0]) <=0 or int(octs[0])>=255:
@@ -105,7 +113,9 @@ class Tunnel(object):
     def establish(self):
         '''Sets up the ssh connection. Will still require user input for the password if necessary
         
-        returns pid of ssh tunnel'''
+        returns the command it would have run
+        ---Future----returns pid of ssh tunnel'''
+        
         self._validate_type()
         self._validate_user()
         
@@ -133,8 +143,6 @@ class Tunnel(object):
             cmd = 'ssh -p {} -NfR {}:{}:{} {}@{}'.format(self.ssh_port,self.orig_port,self.destination,self.dest_port,self.user,self.origin)
             #print(cmd)
             #return
-            
-        print(cmd)
 
         if not DEBUG:
             x = subprocess.Popen(cmd.split(),stdout=subprocess.PIPE,stdin=subprocess.PIPE,stderr=subprocess.PIPE)
@@ -149,6 +157,7 @@ class Tunnel(object):
         return cmd
         
     def _shell(self):
+        '''Hopefully this will spawn a mini shell if needed for host key validation issues'''
         desktop = os.environ.get('XDG_CURRENT_DESKTOP')
         if desktop is not None:
             desktop = desktop.lower()
