@@ -20,20 +20,14 @@ class TunnGui(object):
         
         self.rootFrame.grid(row=0,column=0)
         
-
         # Because we have a grid layout, in order for user resizing to work we have to configure row/column weights
-        self.top.grid_rowconfigure(0,weight=1)
-        self.top.grid_rowconfigure(1,weight=1)
-        self.top.grid_rowconfigure(2,weight=1)
-        self.top.grid_rowconfigure(3,weight=1)
-        self.top.grid_rowconfigure(4,weight=1)
-        self.top.grid_rowconfigure(5,weight=1)
-
-        self.top.grid_columnconfigure(0,weight=1)
-        self.top.grid_columnconfigure(1,weight=1)
-        self.top.grid_columnconfigure(2,weight=1)
-        self.top.grid_columnconfigure(3,weight=1)
-        self.top.grid_columnconfigure(4,weight=1)
+        rows,cols = self.top.grid_size()
+        for i in range(rows):
+            self.top.grid_rowconfigure(i,weight=1)
+        for i in range(cols):
+            self.top.grid_columnconfigure(i,weight=1)
+        
+        
         self.top.mainloop()
     
     def createLeftSide(self):
@@ -50,7 +44,6 @@ class TunnGui(object):
         creator.grid(row=0,column=0,pady=(10,0))
         left_frame.add(horiz_frame)
         self.rootFrame.add(left_frame,width=300)
-        #left_frame.grid(row=0,column=0,padx=10,sticky=tkinter.NSEW)
         
     def createRightSide(self):
         # Paned Window is a resizeable frame that can be "packed" by adding frames/child widgets. They get added in the orient direction.
@@ -61,7 +54,6 @@ class TunnGui(object):
     
         label = tkinter.Label(right_horiz_frame,text="Tunnel Type:",justify=tkinter.RIGHT)
         label.grid(row=0,column=0)
-        #right_horiz_frame.add(label)
     
         self.choice = tkinter.StringVar()
         self.dropdown = ttk.Combobox(right_horiz_frame,values=menu,textvariable=self.choice,state='readonly',justify=tkinter.LEFT,width=30)
@@ -81,35 +73,34 @@ class TunnGui(object):
         right_horiz_frame_2.add(tkinter.Frame(width=5))
         right_frame.add(right_horiz_frame_2)
         self.rootFrame.add(right_frame,width=400)
-        #right_frame.grid(row=0,column=1,padx=10,sticky=tkinter.NSEW)
     
     
         
     # Since we don't want user to be able to control the feedback textbox, we have to enable/disable
     # every time we change it.
     def setText(self,entry,text):
+        '''Method for setting the contents of a Text Widget'''
         entry.config(state='normal')
         entry.insert(tkinter.END,text+'\n')
         entry.config(state='disabled')
-        
-    def getter(self,entry):
-        '''Method for returning the contents of a Text widget'''
-        val = entry.get("1.0",tkinter.END)
-        return val
-    
     def clear(self,entry):
         '''Method for deleting contents of a Text Widget'''
         entry.config(state='normal')
         entry.delete("1.0",tkinter.END)
         entry.config(state='disabled')
         return
+    def getter(self,entry):
+        '''Method for returning the contents of a Text widget'''
+        val = entry.get("1.0",tkinter.END)
+        return val
+    
     
     def createTunnel(self):
         '''Get user input from tkinter app and create a Tunneler class. Validation of Tunnel information should be handled in it's class'''
         try:
             ind = self.dropdown.current()
             if ind==-1:
-                self.text.insert(tkinter.END,'Please select a tunnel type.\n')
+                self.setText(self.text,'Please select a tunnel type.')
             else:
                 tuntype= {"local":(True if ind==0 else False),"remote":(True if ind==1 else False),"dynamic":(True if ind==2 else False)}
                 tunnel = Tunneler.Tunnel(user=self.getter(self.entries[0]).strip(),ssh_port=22,origin_port=9000,destination_port=80,**tuntype)
@@ -123,9 +114,7 @@ class TunnGui(object):
             self.setText(self.text,"Something went wrong")
         
     def createInput(self,frame,label):
-        '''Creates a text box with a label'''
-        
-            
+        '''Creates a text box with a label in a specified frame'''
         left_horiz_frame = tkinter.PanedWindow(orient=tkinter.HORIZONTAL)
         label = tkinter.Label(text=label,justify=tkinter.LEFT)
         text = tkinter.Text(wrap=tkinter.WORD,height=2,width=20)
