@@ -7,6 +7,7 @@ This is my attempt to get back into programming so development will likely be sl
 for now:
 * Code clean up
   * I want this to be easy to read, not the spaghetti code it is now.
+  * Represent Local, Remote and Dynamic SSH tunnels in a better way for users to understand<br>(self->self->redirector->dest is nonsense)
 * Adding features to the GUI
   * Port specification
   * private key selection
