@@ -15,8 +15,8 @@ class TunnGui(object):
         self.top.tk.call('wm', 'iconphoto', self.top._w, tkinter.PhotoImage(file='wormhole.png'))
         self.top.resizable(width=True,height=True)
         
+        # Paned Window is a resizeable frame that can be "packed" by adding frames/child widgets. They get added in the orient direction.
         self.rootFrame = tkinter.PanedWindow(orient=tkinter.HORIZONTAL,borderwidth=3)
-        self.rootFrame.configure(background='darkgrey')
         
         self.createLeftSide()
         self.createRightSide()
@@ -33,25 +33,29 @@ class TunnGui(object):
         self.top.mainloop()
         
     def _config_text(self,event):
+        '''Currently handles enabling/disabling ip text boxes. Once I change how entities are stored
+        this can be improved and cleaned up'''
         ind = self.dropdown.current()
         if ind == -1:
             for i in self.entries[1:]:
                 self.entries.config(state=tkinter.DISABLED,background='lightgrey')
-        if ind==0:
+        if ind==0: # Local
             self.entries[1].config(state=tkinter.DISABLED,background='lightgrey')
             for i in self.entries[2:]:
                 i.config(state=tkinter.NORMAL,background='white')
-        elif ind==1:
+        elif ind==1: # Remote
             self.entries[3].config(state=tkinter.DISABLED,background='lightgrey')
             for i in self.entries[1:3]:
                 i.config(state=tkinter.NORMAL,background='white')
-        elif ind==2:
+        elif ind==2: # Dynamic
             self.entries[3].config(state=tkinter.NORMAL,background='white')
             for i in self.entries[1:3]:
                 i.config(state=tkinter.DISABLED,background='lightgrey')
             pass
     
     def createLeftSide(self):
+        '''Currently the gui is split into two major halves, this handles the left'''
+        
         left_frame = tkinter.PanedWindow(self.top,orient=tkinter.VERTICAL,borderwidth=3)
         
         self.createInput(left_frame,"User:         ",disabled=False)
@@ -59,7 +63,7 @@ class TunnGui(object):
         self.createInput(left_frame,"Dest ip:    ") 
         self.createInput(left_frame,"Redir ip:   ")
         
-        horiz_frame = tkinter.Frame()
+        horiz_frame = tkinter.Frame() # necessary to format the button correctly for some reason
         creator = tkinter.Button(horiz_frame,command=self.createTunnel,text="Create!",width=10,height=2)
         creator.grid(row=0,column=0,pady=(10,0))
         left_frame.add(horiz_frame)
@@ -67,12 +71,14 @@ class TunnGui(object):
         
    
     def createRightSide(self):
-        # Paned Window is a resizeable frame that can be "packed" by adding frames/child widgets. They get added in the orient direction.
+        '''Creating the right half'''
+        
+        
         right_frame = tkinter.PanedWindow(self.top,orient=tkinter.VERTICAL,borderwidth=3)
         right_horiz_frame = tkinter.Frame()
         right_horiz_frame_2 = tkinter.PanedWindow(orient=tkinter.HORIZONTAL)
     
-    
+        ### Label and dropdown ####
         label = tkinter.Label(right_horiz_frame,text="Tunnel Type:",justify=tkinter.RIGHT)
         label.grid(row=0,column=0)
     
@@ -80,12 +86,13 @@ class TunnGui(object):
         self.dropdown = ttk.Combobox(right_horiz_frame,values=menu,textvariable=self.choice,state='readonly',justify=tkinter.LEFT,width=40)
         self.dropdown.bind("<<ComboboxSelected>>", self._config_text)
         self.dropdown.grid(row=0,column=1)
-   
         right_frame.add(right_horiz_frame)
+        
+        ### Next row is just a single element so no frame *really* needed currently ###
         self.text = ScrolledText(right_frame,wrap=tkinter.WORD,height=10,state='disabled')
         right_frame.add(self.text,stretch='always')
         
-    
+        ### Clear button in its own frame to allow resizing ###
         self.text_button = tkinter.Button(right_horiz_frame_2,text="Clear",command=lambda: self.clear(self.text))
         self.text_button.grid(row=0,column=0,padx=(10,0))
         right_frame.add(right_horiz_frame_2)
@@ -107,7 +114,7 @@ class TunnGui(object):
         return
     def getter(self,entry):
         '''Method for returning the contents of a Text widget'''
-        val = entry.get("1.0",tkinter.END)
+        val = entry.get("1.0",tkinter.END).strip()
         return val
     def focus_next_window(self,event):
         '''Method to make tab change textboxes'''
@@ -118,6 +125,7 @@ class TunnGui(object):
         event.widget.tk_focusPrev().focus()
         return("break")        
     def enter_createTunnel(self,event):
+        '''Method to make Return attempt to create a tunnel'''
         self.createTunnel()
         return("break")
     
@@ -130,10 +138,11 @@ class TunnGui(object):
                 self.setText(self.text,'Please select a tunnel type.')
             else:
                 tuntype= {"local":(True if ind==0 else False),"remote":(True if ind==1 else False),"dynamic":(True if ind==2 else False)}
-                tunnel = Tunneler.Tunnel(user=self.getter(self.entries[0]).strip(),ssh_port=22,origin_port=9000,destination_port=80,**tuntype)
-                tunnel.origin=self.getter(self.entries[1]).strip()
-                tunnel.destination=self.getter(self.entries[2]).strip()
-                tunnel.redirector=self.getter(self.entries[3]).strip()
+                # **tuntype makes the dictionary convert to keywords. i.e. {"local":True} converts to local=True
+                tunnel = Tunneler.Tunnel(user=self.getter(self.entries[0]),ssh_port=22,origin_port=9000,destination_port=80,**tuntype)
+                tunnel.origin=self.getter(self.entries[1])
+                tunnel.destination=self.getter(self.entries[2])
+                tunnel.redirector=self.getter(self.entries[3])
                 cmd = tunnel.establish() # Eventually we want to return the pid of the process and track tunnel start/end instead of command
                 self.setText(self.text,cmd)
         except Exception as e:
