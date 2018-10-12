@@ -11,11 +11,12 @@ class TunnGui(object):
         
         self.top = tkinter.Tk()
         self.top.title("Tunneler")
+        
         self.top.tk.call('wm', 'iconphoto', self.top._w, tkinter.PhotoImage(file='wormhole.png'))
         self.top.resizable(width=True,height=True)
         
         self.rootFrame = tkinter.PanedWindow(orient=tkinter.HORIZONTAL,borderwidth=3)
-        
+        self.rootFrame.configure(background='darkgrey')
         
         self.createLeftSide()
         self.createRightSide()
