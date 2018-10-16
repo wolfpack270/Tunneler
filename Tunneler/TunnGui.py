@@ -3,6 +3,17 @@ from tkinter import ttk
 from tkinter.scrolledtext import ScrolledText
 import Tunneler
 
+
+'''
+TODO / Things that broke
+
+Better way to get port when doing local or remote forward (ask for listen_port maybe?)
+Dear god please fix the unholiness that is the createSSHLine()
+
+Need a better sizing mechanism than hardcoded numbers
+'''
+
+
 HEIGHT = 310
 WIDTH = 750
 menu = ['local        |   self->self->redirector->dest',
@@ -11,27 +22,6 @@ menu = ['local        |   self->self->redirector->dest',
 needed = [['dest'],
           ['orig','dest'],
           []]
-'''
-Things to keep track of:
-    input boxes / textboxes - dictionary?
-    userlist for easy repeat input - set
-    
-
---------------------------------------------------------------------------
-| label: self.userbox                         |                          |
-| label: self.entry[1] label: self.ports[0]   |                          |
-| label: self.entry[2] label: self.ports[0]   |                          |
-| label: self.entry[3] label: self.ports[0]   |                          |
-|                                             |                          |
-|                                             |                          |
-|                                             |                          |
-|                                             |                          |
-|                                             |                          |
-|                                             |                          |
-|                                             |                          |
-|                                             |                          |
-|_____________________________________________|__________________________|
-'''
 
 class TunnGui(object):
     def __init__(self):
@@ -43,16 +33,14 @@ class TunnGui(object):
         self.top.bind_class("Text","<Tab>", self.focus_next_window)
         self.top.bind_class("Text","<Shift-Tab>",self.focus_prev_window)
         self.top.bind_class("Text","<Return>",self.enter_createTunnel)
-        
-        self.top.bind_class("Combobox","<Tab>", self.focus_next_window)
-        self.top.bind_class("Combobox","<Shift-Tab>",self.focus_prev_window)
-        self.top.bind_class("Combobox","<Return>",self.enter_createTunnel)        
-
-        
+   
         self.top.minsize(width=WIDTH,height=HEIGHT)
         self.top.title("Tunneler")
         
-        self.top.tk.call('wm', 'iconphoto', self.top._w, tkinter.PhotoImage(file='wormhole.png'))
+        try:
+            self.top.tk.call('wm', 'iconphoto', self.top._w, tkinter.PhotoImage(file='wormhole.png'))
+        except:
+            pass
         self.top.resizable(width=True,height=True)
         
         # Paned Window is a resizeable frame that can be "packed" by adding frames/child widgets. They get added in the orient direction.
@@ -61,6 +49,7 @@ class TunnGui(object):
         self.user = tkinter.StringVar()
         self.ssh_ip = tkinter.StringVar()
         self.ssh_port = tkinter.IntVar()
+        self.ssh_port.set(22)
         
         self.createLeftSide()
         self.createRightSide()
@@ -92,8 +81,7 @@ class TunnGui(object):
         '''Currently the gui is split into two major halves, this handles the left'''
         left_frame = tkinter.PanedWindow(self.top,orient=tkinter.VERTICAL)
         self.createSSHLine(left_frame)
-        
-        #self.host['ssh'] = self.createIPLine(left_frame,"SSH ip:",port=True)
+
         self.host['orig'] = self.createIPLine(left_frame,"Origin ip:",port=True)
         self.host['dest'] = self.createIPLine(left_frame,"Dest ip:",port=True) 
         
@@ -102,6 +90,7 @@ class TunnGui(object):
         creator = tkinter.Button(horiz_frame,command=self.createTunnel,text="Create!",width=10,height=2)
         creator.grid(row=0,column=0,pady=(10,0))
         left_frame.add(horiz_frame)
+        
         self.rootFrame.paneconfig(left_frame,minsize=350)
         self.rootFrame.add(left_frame,padx=5,width=2*WIDTH/3,stretch="always")
         
@@ -127,7 +116,9 @@ class TunnGui(object):
         
         horizontal = tkinter.PanedWindow(frame,orient=tkinter.HORIZONTAL)
         self.userbox = ttk.Combobox(horizontal,textvariable=self.user,justify='left',width=30,font='arial 9')
+        self.userbox.bind('<Return>',self.enter_createTunnel)
         self.sshbox = ttk.Combobox(horizontal,textvariable=self.ssh_ip,justify='left',width=30,font='arial 9')
+        self.sshbox.bind('<Return>',self.enter_createTunnel)
         label = tkinter.Label(horizontal,text="@")
         
         horizontal.paneconfig(self.userbox,minsize=100,stretch='always',sticky=tkinter.NSEW)
@@ -141,20 +132,6 @@ class TunnGui(object):
         
         frame.paneconfig(horizontal,minsize=20)
         frame.add(horizontal,stretch='never')
-        
-        
-        '''
-        left_horiz_frame = tkinter.PanedWindow(orient=tkinter.HORIZONTAL)
-    
-        label =tkinter.Label(text="User:",justify=tkinter.RIGHT,anchor=tkinter.E)
-        self.userbox = ttk.Combobox(textvariable=self.user,justify='left',width=30,font='arial 9')
-    
-        left_horiz_frame.paneconfig(label,minsize=55)
-        left_horiz_frame.paneconfig(self.userbox,minsize=200)        
-        left_horiz_frame.add(label,pady=5,stretch="never")
-        left_horiz_frame.add(self.userbox,pady=5,stretch="last")
-        left_horiz_frame.add(tkinter.Frame())
-        frame.add(left_horiz_frame)'''  
         
     def createIPLine(self,frame,msg,port=False,disabled=True):
         '''Creates a text box with a label in a specified frame'''
@@ -252,7 +229,11 @@ class TunnGui(object):
             else:
                 tuntype= {"local":(True if ind==0 else False),"remote":(True if ind==1 else False),"dynamic":(True if ind==2 else False)}
                 # **tuntype makes the dictionary convert to keywords. i.e. {"local":True} converts to local=True
-                tunnel = Tunneler.Tunnel(user=self.user.get().strip(),ssh_port=22,origin_port=self.getter(self.host['orig']['port']),destination_port=9000,**tuntype)
+                tunnel = Tunneler.Tunnel(user=self.user.get().strip(),
+                                         ssh_port=self.ssh_port.get(),
+                                         origin_port=self.getter(self.host['orig']['port']),
+                                         destination_port=9000,
+                                         **tuntype)
                 tunnel.origin=self.getter(self.host['orig']['ip'])
                 tunnel.destination=self.getter(self.host['dest']['ip'])
                 tunnel.redirector=self.ssh_ip.get()

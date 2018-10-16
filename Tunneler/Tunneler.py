@@ -43,20 +43,22 @@ class Tunnel(object):
         '''Makes sure ports are numbers and inside a valid range (0,65535]'''
         if not (isinstance(self.ssh_port,int) and isinstance(self.dest_port,int) and isinstance(self.orig_port,int)):
             try:
-                self.ssh_port=int(self.ssh_port)
-                if self.local:
+                self.ssh_port=int(self.ssh_port) # Everyone is gonna need to ssh, so always check
+                if self.ssh_port<0 or self.ssh_port>65535:
+                    raise ValueError("SSH port must be between 0 and 65535, not {}".format(self.ssh_port))
+                
+                if self.local or self.remote: 
+                    # If doing a local forward, we need a destination port to send to and a port to listen on
                     self.dest_port=int(self.dest_port)
                     if self.dest_port<0 or self.dest_port>65535:
                         raise ValueError("Destination port must be between 0 and 65535, not {}".format(self.dest_port))
-                elif self.remote:
                     self.orig_port=int(self.orig_port)
                     if self.orig_port<0 or self.orig_port>65535:
                         raise ValueError("Origin port must be between 0 and 65535, not {}".format(self.orig_port))                
             except Exception as e:
                 print(e)
                 raise ValueError("Something went wrong with your port values.\nMake sure they are all integers 0 < x <= 65535")
-        if self.ssh_port<0 or self.ssh_port>65535:
-            raise ValueError("SSH port must be between 0 and 65535, not {}".format(self.ssh_port))
+        
 
         
     
