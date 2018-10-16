@@ -3,20 +3,53 @@ from tkinter import ttk
 from tkinter.scrolledtext import ScrolledText
 import Tunneler
 
-menu = ['local        |   self->self->redirector->dest','remote    |   {any}->origin->self->dest','dynamic |   self->self->redirecter->{any}']
+
+'''
+TODO / Things that broke
+
+Better way to get port when doing local or remote forward (ask for listen_port maybe?)
+Dear god please fix the unholiness that is the createSSHLine()
+
+Need a better sizing mechanism than hardcoded numbers
+'''
+
+
+HEIGHT = 310
+WIDTH = 750
+menu = ['local        |   self->self->redirector->dest',
+        'remote    |   {any}->origin->self->dest',
+        'dynamic |   self->self->redirecter->{any}']
+needed = [['dest'],
+          ['orig','dest'],
+          []]
+
 class TunnGui(object):
     def __init__(self):
-        self.buttons = []
-        self.entries = []
+        self.host={}
+        self.userlist = set()
+        self.sshlist = set()
         
         self.top = tkinter.Tk()
+        self.top.bind_class("Text","<Tab>", self.focus_next_window)
+        self.top.bind_class("Text","<Shift-Tab>",self.focus_prev_window)
+        self.top.bind_class("Text","<Return>",self.enter_createTunnel)
+   
+        self.top.minsize(width=WIDTH,height=HEIGHT)
         self.top.title("Tunneler")
         
-        self.top.tk.call('wm', 'iconphoto', self.top._w, tkinter.PhotoImage(file='wormhole.png'))
+        try:
+            self.top.tk.call('wm', 'iconphoto', self.top._w, tkinter.PhotoImage(file='wormhole.png'))
+        except:
+            pass
         self.top.resizable(width=True,height=True)
         
         # Paned Window is a resizeable frame that can be "packed" by adding frames/child widgets. They get added in the orient direction.
-        self.rootFrame = tkinter.PanedWindow(orient=tkinter.HORIZONTAL,borderwidth=3)
+        self.rootFrame = tkinter.PanedWindow(orient=tkinter.HORIZONTAL)
+        
+        self.user = tkinter.StringVar()
+        self.ssh_ip = tkinter.StringVar()
+        self.ssh_port = tkinter.IntVar()
+        self.ssh_port.set(22)
         
         self.createLeftSide()
         self.createRightSide()
@@ -33,43 +66,99 @@ class TunnGui(object):
         self.top.mainloop()
         
     def _config_text(self,event):
-        '''Currently handles enabling/disabling ip text boxes. Once I change how entities are stored
-        this can be improved and cleaned up'''
-        ind = self.dropdown.current()
-        if ind == -1:
-            for i in self.entries[1:]:
-                self.entries.config(state=tkinter.DISABLED,background='lightgrey')
-        if ind==0: # Local
-            self.entries[1].config(state=tkinter.DISABLED,background='lightgrey')
-            for i in self.entries[2:]:
-                i.config(state=tkinter.NORMAL,background='white')
-        elif ind==1: # Remote
-            self.entries[3].config(state=tkinter.DISABLED,background='lightgrey')
-            for i in self.entries[1:3]:
-                i.config(state=tkinter.NORMAL,background='white')
-        elif ind==2: # Dynamic
-            self.entries[3].config(state=tkinter.NORMAL,background='white')
-            for i in self.entries[1:3]:
-                i.config(state=tkinter.DISABLED,background='lightgrey')
-            pass
+        '''Currently handles enabling/disabling ip text boxes. Still needs improvement - mostly in how we track which inputs we need'''
+        ind = needed[self.dropdown.current()]
+        for i in self.host.values():
+            for j in i.values():
+                j.config(state=tkinter.DISABLED,background='lightgrey')
+        
+        for i in ind:
+            for j in self.host[i].values():
+                j.config(state=tkinter.NORMAL,background='white')
+
     
     def createLeftSide(self):
         '''Currently the gui is split into two major halves, this handles the left'''
+        left_frame = tkinter.PanedWindow(self.top,orient=tkinter.VERTICAL)
+        self.createSSHLine(left_frame)
+
+        self.host['orig'] = self.createIPLine(left_frame,"Origin ip:",port=True)
+        self.host['dest'] = self.createIPLine(left_frame,"Dest ip:",port=True) 
         
-        left_frame = tkinter.PanedWindow(self.top,orient=tkinter.VERTICAL,borderwidth=3)
-        
-        self.createInput(left_frame,"User:         ",disabled=False)
-        self.createInput(left_frame,"Origin ip: ")
-        self.createInput(left_frame,"Dest ip:    ") 
-        self.createInput(left_frame,"Redir ip:   ")
         
         horiz_frame = tkinter.Frame() # necessary to format the button correctly for some reason
         creator = tkinter.Button(horiz_frame,command=self.createTunnel,text="Create!",width=10,height=2)
         creator.grid(row=0,column=0,pady=(10,0))
         left_frame.add(horiz_frame)
-        self.rootFrame.add(left_frame,padx=5,width=300,stretch="always")
         
-   
+        self.rootFrame.paneconfig(left_frame,minsize=350)
+        self.rootFrame.add(left_frame,padx=5,width=2*WIDTH/3,stretch="always")
+        
+    def createSSHLine(self,frame):
+        horizontal = tkinter.Frame(frame)
+        username = tkinter.Label(horizontal,text="user",justify=tkinter.CENTER,width=28)
+        sep = tkinter.Label(horizontal,text="@",justify=tkinter.CENTER,width=10)
+        hostname = tkinter.Label(horizontal,text="hostname",justify=tkinter.CENTER,width=22)
+        port = tkinter.Label(horizontal,text="port",justify=tkinter.CENTER,width=14)
+        
+        horizontal.columnconfigure(0,weight=1)
+        horizontal.columnconfigure(1,weight=1)
+        horizontal.columnconfigure(2,weight=1)
+        horizontal.columnconfigure(3,weight=1)
+        
+        username.grid(row=0,column=0,sticky=tkinter.NSEW)
+        sep.grid(row=0,column=1,sticky=tkinter.NSEW)
+        hostname.grid(row=0,column=2,sticky=tkinter.NSEW)
+        port.grid(row=0,column=3,sticky=tkinter.NSEW)
+        
+        frame.paneconfig(horizontal)
+        frame.add(horizontal,stretch='never')
+        
+        horizontal = tkinter.PanedWindow(frame,orient=tkinter.HORIZONTAL)
+        self.userbox = ttk.Combobox(horizontal,textvariable=self.user,justify='left',width=30,font='arial 9')
+        self.userbox.bind('<Return>',self.enter_createTunnel)
+        self.sshbox = ttk.Combobox(horizontal,textvariable=self.ssh_ip,justify='left',width=30,font='arial 9')
+        self.sshbox.bind('<Return>',self.enter_createTunnel)
+        label = tkinter.Label(horizontal,text="@")
+        
+        horizontal.paneconfig(self.userbox,minsize=100,stretch='always',sticky=tkinter.NSEW)
+        horizontal.paneconfig(label,minsize=10,stretch='never')
+        horizontal.paneconfig(self.sshbox,minsize=100,stretch='always',sticky=tkinter.NSEW)
+        
+        horizontal.add(self.userbox)
+        horizontal.add(label)
+        horizontal.add(self.sshbox)
+        horizontal.add(tkinter.Entry(horizontal,width=10,textvariable=self.ssh_port,font='arial 9'))
+        
+        frame.paneconfig(horizontal,minsize=20)
+        frame.add(horizontal,stretch='never')
+        
+    def createIPLine(self,frame,msg,port=False,disabled=True):
+        '''Creates a text box with a label in a specified frame'''
+        left_horiz_frame = tkinter.PanedWindow(frame,orient=tkinter.HORIZONTAL)
+        
+        label = tkinter.Label(text=msg,justify=tkinter.RIGHT,anchor=tkinter.E)
+        ip = tkinter.Text(wrap=tkinter.WORD,font='arial 9',height=1,width=25,state=(tkinter.DISABLED if disabled else tkinter.NORMAL),background=('lightgrey' if disabled else 'white'))
+
+        left_horiz_frame.paneconfig(label,minsize=55)
+        left_horiz_frame.paneconfig(ip,minsize=200)        
+        left_horiz_frame.add(label,pady=5,stretch="never")
+        left_horiz_frame.add(ip,pady=5,stretch="always")
+                
+        label = tkinter.Label(text="Port:",justify=tkinter.RIGHT,anchor=tkinter.E)
+        port = tkinter.Text(wrap=tkinter.WORD,font='arial 9',height=1,width=6,state=(tkinter.DISABLED if disabled else tkinter.NORMAL),background=('lightgrey' if disabled else 'white'))
+      
+
+        left_horiz_frame.paneconfig(label,minsize=27)
+        left_horiz_frame.paneconfig(port,minsize=27)            
+        left_horiz_frame.add(label,pady=5,stretch="never")
+        left_horiz_frame.add(port,pady=5,stretch="never")
+
+        
+        frame.add(left_horiz_frame,stretch='last')     
+        return {'ip':ip,'port':port}
+    
+    
     def createRightSide(self):
         '''Creating the right half'''
         
@@ -83,10 +172,10 @@ class TunnGui(object):
         label.grid(row=0,column=0)
     
         self.choice = tkinter.StringVar()
-        self.dropdown = ttk.Combobox(right_horiz_frame,values=menu,textvariable=self.choice,state='readonly',justify=tkinter.LEFT,width=40)
+        self.dropdown = ttk.Combobox(right_horiz_frame,values=menu,textvariable=self.choice,state='readonly',justify=tkinter.LEFT,width=35)
         self.dropdown.bind("<<ComboboxSelected>>", self._config_text)
         self.dropdown.grid(row=0,column=1)
-        right_frame.add(right_horiz_frame)
+        right_frame.add(right_horiz_frame,stretch="first")
         
         ### Next row is just a single element so no frame *really* needed currently ###
         self.text = ScrolledText(right_frame,wrap=tkinter.WORD,height=10,state='disabled')
@@ -96,6 +185,7 @@ class TunnGui(object):
         self.text_button = tkinter.Button(right_horiz_frame_2,text="Clear",command=lambda: self.clear(self.text))
         self.text_button.grid(row=0,column=0,padx=(10,0))
         right_frame.add(right_horiz_frame_2)
+        self.rootFrame.paneconfig(right_frame,minsize=3*WIDTH/5)
         self.rootFrame.add(right_frame,padx=10,pady=10, width=400,stretch="always")
     
         
@@ -139,29 +229,25 @@ class TunnGui(object):
             else:
                 tuntype= {"local":(True if ind==0 else False),"remote":(True if ind==1 else False),"dynamic":(True if ind==2 else False)}
                 # **tuntype makes the dictionary convert to keywords. i.e. {"local":True} converts to local=True
-                tunnel = Tunneler.Tunnel(user=self.getter(self.entries[0]),ssh_port=22,origin_port=9000,destination_port=80,**tuntype)
-                tunnel.origin=self.getter(self.entries[1])
-                tunnel.destination=self.getter(self.entries[2])
-                tunnel.redirector=self.getter(self.entries[3])
+                tunnel = Tunneler.Tunnel(user=self.user.get().strip(),
+                                         ssh_port=self.ssh_port.get(),
+                                         origin_port=self.getter(self.host['orig']['port']),
+                                         destination_port=9000,
+                                         **tuntype)
+                tunnel.origin=self.getter(self.host['orig']['ip'])
+                tunnel.destination=self.getter(self.host['dest']['ip'])
+                tunnel.redirector=self.ssh_ip.get()
                 cmd = tunnel.establish() # Eventually we want to return the pid of the process and track tunnel start/end instead of command
+                
+                self.userlist.add(self.user.get().strip())
+                self.userbox.config(values=list(self.userlist)) # If successful update user list
+                
+                self.sshlist.add(self.ssh_ip.get().strip())
+                self.sshbox.config(values=list(self.sshlist))
+                
                 self.setText(self.text,cmd)
         except Exception as e:
             self.setText(self.text,str(e))
-        
-    def createInput(self,frame,label,disabled=True):
-        '''Creates a text box with a label in a specified frame'''
-        left_horiz_frame = tkinter.PanedWindow(orient=tkinter.HORIZONTAL)
-        label = tkinter.Label(text=label,justify=tkinter.LEFT)
-        text = tkinter.Text(wrap=tkinter.WORD,height=1,width=20,state=(tkinter.DISABLED if disabled else tkinter.NORMAL),background=('lightgrey' if disabled else 'white'))
-        text.bind("<Tab>", self.focus_next_window)
-        text.bind("<Shift-Tab>",self.focus_prev_window)
-        text.bind("<Return>",self.enter_createTunnel)
-        self.entries.append(text)
-        left_horiz_frame.add(label,pady=10)
-        left_horiz_frame.add(text,pady=10)
-        frame.add(left_horiz_frame)        
-        
-        return
              
 if __name__=='__main__':  
     x = TunnGui()

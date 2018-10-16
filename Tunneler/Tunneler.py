@@ -34,7 +34,6 @@ class Tunnel(object):
     def _validate_type(self):
         '''Verifies a tunnel type is selected'''
         if not all(map(lambda x : (isinstance(x,bool) or x==0 or x==1),[self.remote,self.local,self.dynamic])):
-            #print("remote,local and dynamic must be boolean values")
             raise ValueError("remote,local and dynamic must be boolean values")
         
         if sum([self.remote,self.local,self.dynamic])>1:
@@ -43,25 +42,33 @@ class Tunnel(object):
     def _validate_ports(self):
         '''Makes sure ports are numbers and inside a valid range (0,65535]'''
         if not (isinstance(self.ssh_port,int) and isinstance(self.dest_port,int) and isinstance(self.orig_port,int)):
-            raise ValueError("Something went wrong with your port values.\nMake sure they are all integers 0 < x <= 65535")
-        if self.ssh_port<0 or self.ssh_port>65535:
-            raise ValueError("SSH port must be between 0 and 65535, not {}".format(self.ssh_port))
-        elif self.dest_port<0 or self.dest_port>65535:
-            raise ValueError("Destination port must be between 0 and 65535, not {}".format(self.dest_port))
-        elif self.orig_port<0 or self.orig_port>65535:
-            raise ValueError("Origin port must be between 0 and 65535, not {}".format(self.orig_port))
+            try:
+                self.ssh_port=int(self.ssh_port) # Everyone is gonna need to ssh, so always check
+                if self.ssh_port<0 or self.ssh_port>65535:
+                    raise ValueError("SSH port must be between 0 and 65535, not {}".format(self.ssh_port))
+                
+                if self.local or self.remote: 
+                    # If doing a local forward, we need a destination port to send to and a port to listen on
+                    self.dest_port=int(self.dest_port)
+                    if self.dest_port<0 or self.dest_port>65535:
+                        raise ValueError("Destination port must be between 0 and 65535, not {}".format(self.dest_port))
+                    self.orig_port=int(self.orig_port)
+                    if self.orig_port<0 or self.orig_port>65535:
+                        raise ValueError("Origin port must be between 0 and 65535, not {}".format(self.orig_port))                
+            except Exception as e:
+                print(e)
+                raise ValueError("Something went wrong with your port values.\nMake sure they are all integers 0 < x <= 65535")
+        
+
         
     
     def _validate_user(self):
         '''Ensures usernames start with a character and consist of only alpha numeric values'''
         if self.user.strip() == '':
-            #print("Username can not be blank")
             raise ValueError("Username can not be blank")
         if self.user[0] not in string.ascii_letters:
-            #print("Username must start with a letter")
             raise ValueError("Username must start with a letter")
         if not all(map(lambda x : x in string.ascii_letters+string.digits,self.user)):
-            #print("Username {} invalid".format(self.user))
             raise ValueError("Username {} invalid".format(self.user))
         
     def _validate_ip(self,ip):
@@ -71,8 +78,12 @@ class Tunnel(object):
         Checks if the input is a valid ip (4 octets, not starting with 0 or 255)'''
         ip=ip.strip()
         if not isinstance(ip,str):
-            #print("ip {} must be string".format(ip))
             raise TypeError("ip {} must be string".format(ip))
+        
+        for i in string.whitespace:
+            if i in ip:
+                raise ValueError("ip can not contain whitespace")
+            
         if ip is "":
             raise ValueError("ip field can not be empty")
         if ip == 'localhost':
@@ -83,12 +94,10 @@ class Tunnel(object):
                 if socket.gethostbyname(ip):
                     return
         except:
-            #print("IP could not resolve")
             raise ValueError("Could not resolve {}".format(ip))
         
         
         if len(octs) != 4:
-            #print("Invalid number of octets in ip {}".format(ip))
             raise IndexError("Invalid number of octets in ip {}".format(ip))
         
         
@@ -97,12 +106,10 @@ class Tunnel(object):
             return
           
         if int(octs[0]) <=0 or int(octs[0])>=255:
-            #print("ip address can not start with {}".format(octs[0]))
             raise ValueError("ip address can not start with {}".format(octs[0]))
         
         for i in octs[1:]:
             if int(i)<0 or int(i)>255:
-                #print("Invalid ip {}".format(ip))
                 raise ValueError("Invalid ip {}".format(ip))
         
     
@@ -126,8 +133,6 @@ class Tunnel(object):
         if self.dynamic:
             
             cmd = 'ssh -p {} -NfD {} {}@{}'.format(self.ssh_port,self.dest_port,self.user,self.redirector)
-            #print(cmd)
-            #return
         
         else:
             self._validate_ip(self.destination)
@@ -136,14 +141,10 @@ class Tunnel(object):
             if self.destination == 'localhost' or self.destination[0:len('127.0.0.')] == '127.0.0.':
                 self.destination = self.redirector
             cmd = 'ssh -p {} -NfL {}:{}:{} {}@{}'.format(self.ssh_port,self.orig_port,self.destination,self.dest_port,self.user,self.redirector)
-            #print(cmd)
-            #return
         
         if self.remote:
             self._validate_ip(self.origin)
             cmd = 'ssh -p {} -NfR {}:{}:{} {}@{}'.format(self.ssh_port,self.orig_port,self.destination,self.dest_port,self.user,self.origin)
-            #print(cmd)
-            #return
 
         if not DEBUG:
             x = subprocess.Popen(cmd.split(),stdout=subprocess.PIPE,stdin=subprocess.PIPE,stderr=subprocess.PIPE)
