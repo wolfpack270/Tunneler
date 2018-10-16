@@ -44,16 +44,20 @@ class Tunnel(object):
         if not (isinstance(self.ssh_port,int) and isinstance(self.dest_port,int) and isinstance(self.orig_port,int)):
             try:
                 self.ssh_port=int(self.ssh_port)
-                self.dest_port=int(self.dest_port)
-                self.orig_port=int(self.orig_port)
-            except:
+                if self.local:
+                    self.dest_port=int(self.dest_port)
+                    if self.dest_port<0 or self.dest_port>65535:
+                        raise ValueError("Destination port must be between 0 and 65535, not {}".format(self.dest_port))
+                elif self.remote:
+                    self.orig_port=int(self.orig_port)
+                    if self.orig_port<0 or self.orig_port>65535:
+                        raise ValueError("Origin port must be between 0 and 65535, not {}".format(self.orig_port))                
+            except Exception as e:
+                print(e)
                 raise ValueError("Something went wrong with your port values.\nMake sure they are all integers 0 < x <= 65535")
         if self.ssh_port<0 or self.ssh_port>65535:
             raise ValueError("SSH port must be between 0 and 65535, not {}".format(self.ssh_port))
-        elif self.dest_port<0 or self.dest_port>65535:
-            raise ValueError("Destination port must be between 0 and 65535, not {}".format(self.dest_port))
-        elif self.orig_port<0 or self.orig_port>65535:
-            raise ValueError("Origin port must be between 0 and 65535, not {}".format(self.orig_port))
+
         
     
     def _validate_user(self):
@@ -73,6 +77,11 @@ class Tunnel(object):
         ip=ip.strip()
         if not isinstance(ip,str):
             raise TypeError("ip {} must be string".format(ip))
+        
+        for i in string.whitespace:
+            if i in ip:
+                raise ValueError("ip can not contain whitespace")
+            
         if ip is "":
             raise ValueError("ip field can not be empty")
         if ip == 'localhost':
