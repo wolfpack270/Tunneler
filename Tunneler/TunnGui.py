@@ -5,14 +5,49 @@ import Tunneler
 
 HEIGHT = 300
 WIDTH = 750
-menu = ['local        |   self->self->redirector->dest','remote    |   {any}->origin->self->dest','dynamic |   self->self->redirecter->{any}']
+menu = ['local        |   self->self->redirector->dest',
+        'remote    |   {any}->origin->self->dest',
+        'dynamic |   self->self->redirecter->{any}']
+needed = [['redir','dest'],
+          ['orig','dest'],
+          ['redir']]
+'''
+Things to keep track of:
+    input boxes / textboxes - dictionary?
+    userlist for easy repeat input - set
+    
+
+--------------------------------------------------------------------------
+| label: self.userbox                         |                          |
+| label: self.entry[1] label: self.ports[0]   |                          |
+| label: self.entry[2] label: self.ports[0]   |                          |
+| label: self.entry[3] label: self.ports[0]   |                          |
+|                                             |                          |
+|                                             |                          |
+|                                             |                          |
+|                                             |                          |
+|                                             |                          |
+|                                             |                          |
+|                                             |                          |
+|                                             |                          |
+|_____________________________________________|__________________________|
+'''
+
 class TunnGui(object):
     def __init__(self):
-        self.ports = []
-        self.entries = []
+        self.host={}
         self.userlist = set()
         
         self.top = tkinter.Tk()
+        self.top.bind_class("Text","<Tab>", self.focus_next_window)
+        self.top.bind_class("Text","<Shift-Tab>",self.focus_prev_window)
+        self.top.bind_class("Text","<Return>",self.enter_createTunnel)    
+        
+        self.top.bind_class("Combobox","<Tab>", self.focus_next_window)
+        self.top.bind_class("Combobox","<Shift-Tab>",self.focus_prev_window)
+        self.top.bind_class("Combobox","<Return>",self.enter_createTunnel)        
+
+        
         self.top.minsize(width=WIDTH,height=HEIGHT)
         self.top.title("Tunneler")
         
@@ -38,34 +73,16 @@ class TunnGui(object):
         self.top.mainloop()
         
     def _config_text(self,event):
-        '''Currently handles enabling/disabling ip text boxes. Once I change how entities are stored
-        this can be improved and cleaned up'''
-        ind = self.dropdown.current()
-        if ind == -1:
-            for i in self.entries[1:]:
-                self.entries.config(state=tkinter.DISABLED,background='lightgrey')
-        if ind==0: # Local
-            self.entries[1].config(state=tkinter.DISABLED,background='lightgrey')
-            self.ports[0].config(state=tkinter.DISABLED,background='lightgrey')
-            for i in self.entries[2:]:
-                i.config(state=tkinter.NORMAL,background='white')
-            for i in self.ports[1:]:
-                i.config(state=tkinter.NORMAL,background='white')            
-        elif ind==1: # Remote
-            self.entries[3].config(state=tkinter.DISABLED,background='lightgrey')
-            self.ports[2].config(state=tkinter.DISABLED,background='lightgrey')
-            for i in self.entries[1:3]:
-                i.config(state=tkinter.NORMAL,background='white')
-            for i in self.ports[0:2]:
-                i.config(state=tkinter.NORMAL,background='white')            
-        elif ind==2: # Dynamic
-            self.entries[3].config(state=tkinter.NORMAL,background='white')
-            self.ports[2].config(state=tkinter.NORMAL,background='white')
-            for i in self.entries[1:3]:
-                i.config(state=tkinter.DISABLED,background='lightgrey')
-            for i in self.ports[0:2]:
-                i.config(state=tkinter.DISABLED,background='lightgrey')            
-            pass
+        '''Currently handles enabling/disabling ip text boxes. Still needs improvement - mostly in how we track which inputs we need'''
+        ind = needed[self.dropdown.current()]
+        for i in self.host.values():
+            for j in i.values():
+                j.config(state=tkinter.DISABLED,background='lightgrey')
+        
+        for i in ind:
+            for j in self.host[i].values():
+                j.config(state=tkinter.NORMAL,background='white')
+
     
     def createLeftSide(self):
         '''Currently the gui is split into two major halves, this handles the left'''
@@ -75,20 +92,17 @@ class TunnGui(object):
         
         label =tkinter.Label(text="User:",justify=tkinter.RIGHT,anchor=tkinter.E)
         self.userbox = ttk.Combobox(textvariable=self.user,justify='left',width=30)
-        self.userbox.bind("<Tab>", self.focus_next_window)
-        self.userbox.bind("<Shift-Tab>",self.focus_prev_window)
-        self.userbox.bind("<Return>",self.enter_createTunnel)
+        
         left_horiz_frame.paneconfig(label,minsize=55)
         left_horiz_frame.paneconfig(self.userbox,minsize=200)        
         left_horiz_frame.add(label,pady=5,stretch="never")
         left_horiz_frame.add(self.userbox,pady=5,stretch="last")
         left_horiz_frame.add(tkinter.Frame())
         left_frame.add(left_horiz_frame)
-        self.entries.append(self.userbox)
         
-        self.createInput(left_frame,"Origin ip:",port=True)
-        self.createInput(left_frame,"Dest ip:",port=True) 
-        self.createInput(left_frame,"Redir ip:",port=True)
+        self.host['orig'] = self.createIPLine(left_frame,"Origin ip:",port=True)
+        self.host['dest'] = self.createIPLine(left_frame,"Dest ip:",port=True) 
+        self.host['redir'] = self.createIPLine(left_frame,"Redir ip:",port=True)
         
         horiz_frame = tkinter.Frame() # necessary to format the button correctly for some reason
         creator = tkinter.Button(horiz_frame,command=self.createTunnel,text="Create!",width=10,height=2)
@@ -97,36 +111,30 @@ class TunnGui(object):
         self.rootFrame.paneconfig(left_frame,minsize=350)
         self.rootFrame.add(left_frame,padx=5,width=2*WIDTH/3,stretch="always")
         
-    def createInput(self,frame,msg,port=False,disabled=True):
+    def createIPLine(self,frame,msg,port=False,disabled=True):
         '''Creates a text box with a label in a specified frame'''
         left_horiz_frame = tkinter.PanedWindow(orient=tkinter.HORIZONTAL)
         
         label = tkinter.Label(text=msg,justify=tkinter.RIGHT,anchor=tkinter.E)
-        text = tkinter.Text(wrap=tkinter.WORD,height=1,width=25,state=(tkinter.DISABLED if disabled else tkinter.NORMAL),background=('lightgrey' if disabled else 'white'))
-        text.bind("<Tab>", self.focus_next_window)
-        text.bind("<Shift-Tab>",self.focus_prev_window)
-        text.bind("<Return>",self.enter_createTunnel)
-        self.entries.append(text)
+        ip = tkinter.Text(wrap=tkinter.WORD,height=1,width=25,state=(tkinter.DISABLED if disabled else tkinter.NORMAL),background=('lightgrey' if disabled else 'white'))
+
         left_horiz_frame.paneconfig(label,minsize=55)
-        left_horiz_frame.paneconfig(text,minsize=200)        
+        left_horiz_frame.paneconfig(ip,minsize=200)        
         left_horiz_frame.add(label,pady=5,stretch="never")
-        left_horiz_frame.add(text,pady=5,stretch="always")
+        left_horiz_frame.add(ip,pady=5,stretch="always")
                 
-        if port:
-            label = tkinter.Label(text="Port:",justify=tkinter.RIGHT,anchor=tkinter.E)
-            text2 = tkinter.Text(wrap=tkinter.WORD,height=1,width=6,state=(tkinter.DISABLED if disabled else tkinter.NORMAL),background=('lightgrey' if disabled else 'white'))
-            text2.bind("<Tab>", self.focus_next_window)
-            text2.bind("<Shift-Tab>",self.focus_prev_window)
-            text2.bind("<Return>",self.enter_createTunnel)            
-            self.ports.append(text2)
-            left_horiz_frame.paneconfig(label,minsize=27)
-            left_horiz_frame.paneconfig(text2,minsize=27)            
-            left_horiz_frame.add(label,pady=5,stretch="never")
-            left_horiz_frame.add(text2,pady=5,stretch="never")
+        label = tkinter.Label(text="Port:",justify=tkinter.RIGHT,anchor=tkinter.E)
+        port = tkinter.Text(wrap=tkinter.WORD,height=1,width=6,state=(tkinter.DISABLED if disabled else tkinter.NORMAL),background=('lightgrey' if disabled else 'white'))
+      
+
+        left_horiz_frame.paneconfig(label,minsize=27)
+        left_horiz_frame.paneconfig(port,minsize=27)            
+        left_horiz_frame.add(label,pady=5,stretch="never")
+        left_horiz_frame.add(port,pady=5,stretch="never")
 
         
         frame.add(left_horiz_frame,stretch='last')     
-   
+        return {'ip':ip,'port':port}
     def createRightSide(self):
         '''Creating the right half'''
         
@@ -197,17 +205,16 @@ class TunnGui(object):
             else:
                 tuntype= {"local":(True if ind==0 else False),"remote":(True if ind==1 else False),"dynamic":(True if ind==2 else False)}
                 # **tuntype makes the dictionary convert to keywords. i.e. {"local":True} converts to local=True
-                tunnel = Tunneler.Tunnel(user=self.user.get().strip(),ssh_port=22,origin_port=self.getter(self.ports[0]),destination_port=self.getter(self.ports[1]),**tuntype)
-                tunnel.origin=self.getter(self.entries[1])
-                tunnel.destination=self.getter(self.entries[2])
-                tunnel.redirector=self.getter(self.entries[3])
+                tunnel = Tunneler.Tunnel(user=self.user.get().strip(),ssh_port=self.getter(self.host['redir']['port']),origin_port=self.getter(self.host['orig']['port']),destination_port=self.getter(self.host['dest']['port']),**tuntype)
+                tunnel.origin=self.getter(self.host['orig']['ip'])
+                tunnel.destination=self.getter(self.host['dest']['ip'])
+                tunnel.redirector=self.getter(self.host['redir']['ip'])
                 cmd = tunnel.establish() # Eventually we want to return the pid of the process and track tunnel start/end instead of command
                 self.userlist.add(self.user.get().strip())
-                self.userbox.config(values=list(self.userlist))
+                self.userbox.config(values=list(self.userlist)) # If successful update user list 
                 self.setText(self.text,cmd)
         except Exception as e:
             self.setText(self.text,str(e))
-        
              
 if __name__=='__main__':  
     x = TunnGui()
