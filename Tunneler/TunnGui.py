@@ -6,10 +6,11 @@ import Tunneler
 menu = ['local        |   self->self->redirector->dest','remote    |   {any}->origin->self->dest','dynamic |   self->self->redirecter->{any}']
 class TunnGui(object):
     def __init__(self):
-        self.buttons = []
+        self.ports = []
         self.entries = []
         
         self.top = tkinter.Tk()
+        self.top.minsize(width=700,height=300)
         self.top.title("Tunneler")
         
         self.top.tk.call('wm', 'iconphoto', self.top._w, tkinter.PhotoImage(file='wormhole.png'))
@@ -19,6 +20,7 @@ class TunnGui(object):
         self.rootFrame = tkinter.PanedWindow(orient=tkinter.HORIZONTAL,borderwidth=3)
         
         self.createLeftSide()
+
         self.createRightSide()
         self.rootFrame.grid(row=0,column=0,sticky=tkinter.NSEW)
         
@@ -41,16 +43,25 @@ class TunnGui(object):
                 self.entries.config(state=tkinter.DISABLED,background='lightgrey')
         if ind==0: # Local
             self.entries[1].config(state=tkinter.DISABLED,background='lightgrey')
+            self.ports[0].config(state=tkinter.DISABLED,background='lightgrey')
             for i in self.entries[2:]:
                 i.config(state=tkinter.NORMAL,background='white')
+            for i in self.ports[1:]:
+                i.config(state=tkinter.NORMAL,background='white')            
         elif ind==1: # Remote
             self.entries[3].config(state=tkinter.DISABLED,background='lightgrey')
+            self.ports[2].config(state=tkinter.DISABLED,background='lightgrey')
             for i in self.entries[1:3]:
                 i.config(state=tkinter.NORMAL,background='white')
+            for i in self.ports[0:2]:
+                i.config(state=tkinter.NORMAL,background='white')            
         elif ind==2: # Dynamic
             self.entries[3].config(state=tkinter.NORMAL,background='white')
+            self.ports[2].config(state=tkinter.NORMAL,background='white')
             for i in self.entries[1:3]:
                 i.config(state=tkinter.DISABLED,background='lightgrey')
+            for i in self.ports[0:2]:
+                i.config(state=tkinter.DISABLED,background='lightgrey')            
             pass
     
     def createLeftSide(self):
@@ -59,16 +70,48 @@ class TunnGui(object):
         left_frame = tkinter.PanedWindow(self.top,orient=tkinter.VERTICAL,borderwidth=3)
         
         self.createInput(left_frame,"User:         ",disabled=False)
-        self.createInput(left_frame,"Origin ip: ")
-        self.createInput(left_frame,"Dest ip:    ") 
-        self.createInput(left_frame,"Redir ip:   ")
+        self.createInput(left_frame,"Origin ip: ",port=True)
+        self.createInput(left_frame,"Dest ip:    ",port=True) 
+        self.createInput(left_frame,"Redir ip:   ",port=True)
         
         horiz_frame = tkinter.Frame() # necessary to format the button correctly for some reason
         creator = tkinter.Button(horiz_frame,command=self.createTunnel,text="Create!",width=10,height=2)
         creator.grid(row=0,column=0,pady=(10,0))
         left_frame.add(horiz_frame)
+        self.rootFrame.paneconfig(left_frame,minsize=300)
         self.rootFrame.add(left_frame,padx=5,width=300,stretch="always")
         
+    def createInput(self,frame,label,port=False,disabled=True):
+        '''Creates a text box with a label in a specified frame'''
+        left_horiz_frame = tkinter.PanedWindow(orient=tkinter.HORIZONTAL)
+        
+        label = tkinter.Label(text=label,justify=tkinter.LEFT)
+        text = tkinter.Text(wrap=tkinter.WORD,height=1,width=25,state=(tkinter.DISABLED if disabled else tkinter.NORMAL),background=('lightgrey' if disabled else 'white'))
+        text.bind("<Tab>", self.focus_next_window)
+        text.bind("<Shift-Tab>",self.focus_prev_window)
+        text.bind("<Return>",self.enter_createTunnel)
+        self.entries.append(text)
+        left_horiz_frame.paneconfig(label,minsize=55)
+        left_horiz_frame.paneconfig(text,minsize=200)        
+        left_horiz_frame.add(label,pady=5,stretch="never")
+        left_horiz_frame.add(text,pady=5,stretch="always")
+                
+        if port:
+            label = tkinter.Label(text="Port",justify=tkinter.LEFT)
+            text2 = tkinter.Text(wrap=tkinter.WORD,height=1,width=6,state=(tkinter.DISABLED if disabled else tkinter.NORMAL),background=('lightgrey' if disabled else 'white'))
+            text2.bind("<Tab>", self.focus_next_window)
+            text2.bind("<Shift-Tab>",self.focus_prev_window)
+            text2.bind("<Return>",self.enter_createTunnel)            
+            self.ports.append(text2)
+            left_horiz_frame.paneconfig(label,minsize=25)
+            left_horiz_frame.paneconfig(text2,minsize=25)            
+            left_horiz_frame.add(label,pady=5,stretch="never")
+            left_horiz_frame.add(text2,pady=5,stretch="never")
+
+        
+        frame.add(left_horiz_frame)        
+        
+        return        
    
     def createRightSide(self):
         '''Creating the right half'''
@@ -83,10 +126,10 @@ class TunnGui(object):
         label.grid(row=0,column=0)
     
         self.choice = tkinter.StringVar()
-        self.dropdown = ttk.Combobox(right_horiz_frame,values=menu,textvariable=self.choice,state='readonly',justify=tkinter.LEFT,width=40)
+        self.dropdown = ttk.Combobox(right_horiz_frame,values=menu,textvariable=self.choice,state='readonly',justify=tkinter.LEFT,width=35)
         self.dropdown.bind("<<ComboboxSelected>>", self._config_text)
         self.dropdown.grid(row=0,column=1)
-        right_frame.add(right_horiz_frame)
+        right_frame.add(right_horiz_frame,stretch="first")
         
         ### Next row is just a single element so no frame *really* needed currently ###
         self.text = ScrolledText(right_frame,wrap=tkinter.WORD,height=10,state='disabled')
@@ -96,6 +139,7 @@ class TunnGui(object):
         self.text_button = tkinter.Button(right_horiz_frame_2,text="Clear",command=lambda: self.clear(self.text))
         self.text_button.grid(row=0,column=0,padx=(10,0))
         right_frame.add(right_horiz_frame_2)
+        self.rootFrame.paneconfig(right_frame,minsize=400)
         self.rootFrame.add(right_frame,padx=10,pady=10, width=400,stretch="always")
     
         
@@ -139,7 +183,7 @@ class TunnGui(object):
             else:
                 tuntype= {"local":(True if ind==0 else False),"remote":(True if ind==1 else False),"dynamic":(True if ind==2 else False)}
                 # **tuntype makes the dictionary convert to keywords. i.e. {"local":True} converts to local=True
-                tunnel = Tunneler.Tunnel(user=self.getter(self.entries[0]),ssh_port=22,origin_port=9000,destination_port=80,**tuntype)
+                tunnel = Tunneler.Tunnel(user=self.getter(self.entries[0]),ssh_port=22,origin_port=self.getter(self.ports[0]),destination_port=self.getter(self.ports[1]),**tuntype)
                 tunnel.origin=self.getter(self.entries[1])
                 tunnel.destination=self.getter(self.entries[2])
                 tunnel.redirector=self.getter(self.entries[3])
@@ -148,20 +192,6 @@ class TunnGui(object):
         except Exception as e:
             self.setText(self.text,str(e))
         
-    def createInput(self,frame,label,disabled=True):
-        '''Creates a text box with a label in a specified frame'''
-        left_horiz_frame = tkinter.PanedWindow(orient=tkinter.HORIZONTAL)
-        label = tkinter.Label(text=label,justify=tkinter.LEFT)
-        text = tkinter.Text(wrap=tkinter.WORD,height=1,width=20,state=(tkinter.DISABLED if disabled else tkinter.NORMAL),background=('lightgrey' if disabled else 'white'))
-        text.bind("<Tab>", self.focus_next_window)
-        text.bind("<Shift-Tab>",self.focus_prev_window)
-        text.bind("<Return>",self.enter_createTunnel)
-        self.entries.append(text)
-        left_horiz_frame.add(label,pady=10)
-        left_horiz_frame.add(text,pady=10)
-        frame.add(left_horiz_frame)        
-        
-        return
              
 if __name__=='__main__':  
     x = TunnGui()
